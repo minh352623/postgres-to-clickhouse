@@ -135,7 +135,7 @@ services:
       KAFKA_BROKERS: kafka:9092
       CLICKHOUSE_URL: https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: CryI6p0oB.Cd6
+      CLICKHOUSE_PASSWORD: my-passwork
     networks:
       - streaming-net
 
@@ -192,7 +192,7 @@ services:
     environment:
       CLICKHOUSE_URL: https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: CryI6p0oB.Cd6
+      CLICKHOUSE_PASSWORD: my-passwork
       CLICKHOUSE_DATABASE: default
     networks:
       - streaming-net

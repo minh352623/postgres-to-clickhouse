@@ -8,7 +8,7 @@ set -e
 CLICKHOUSE_HOST="h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud"
 CLICKHOUSE_PORT="8443"
 CLICKHOUSE_USER="default"
-CLICKHOUSE_PASSWORD="CryI6p0oB.Cd6"
+CLICKHOUSE_PASSWORD="my-passwork"
 CLICKHOUSE_URL="https://${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}"
 
 GREEN='\033[0;32m'
