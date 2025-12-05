@@ -1,0 +1,211 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # PostgreSQL Database (CDC-enabled)
+  # ============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: streaming-postgres
+    environment:
+      POSTGRES_DB: orders_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/src/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - streaming-net
+
+  # ============================================================================
+  # Zookeeper (Kafka dependency)
+  # ============================================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: streaming-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - streaming-net
+
+  # ============================================================================
+  # Kafka Broker
+  # ============================================================================
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: streaming-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - streaming-net
+
+  # ============================================================================
+  # Kafka UI (Optional - for monitoring)
+  # ============================================================================
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: streaming-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - streaming-net
+
+  # ============================================================================
+  # Kafka Connect with Debezium (CDC)
+  # ============================================================================
+  kafka-connect:
+    image: debezium/connect:2.5
+    container_name: streaming-kafka-connect
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_statuses
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+    volumes:
+      - ./debezium:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - streaming-net
+
+  # ============================================================================
+  # ClickHouse Cloud Bridge (Kafka -> ClickHouse Cloud)
+  # ============================================================================
+  clickhouse-bridge:
+    build:
+      context: ./clickhouse-bridge
+      dockerfile: Dockerfile
+    container_name: streaming-clickhouse-bridge
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-connect:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      CLICKHOUSE_URL: https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: CryI6p0oB.Cd6
+    networks:
+      - streaming-net
+
+  # ============================================================================
+  # Connector Auto-Registrar
+  # ============================================================================
+  connector-registrar:
+    image: curlimages/curl:latest
+    container_name: streaming-connector-registrar
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+    volumes:
+      - ./debezium:/config
+    command: sh /config/register.sh
+    networks:
+      - streaming-net
+
+  # ============================================================================
+  # Backend Service (Node.js order API)
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: streaming-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: orders_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    networks:
+      - streaming-net
+
+  # ============================================================================
+  # Frontend Dashboard (Next.js)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: streaming-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      CLICKHOUSE_URL: https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: CryI6p0oB.Cd6
+      CLICKHOUSE_DATABASE: default
+    networks:
+      - streaming-net
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  streaming-net:
+    driver: bridge
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  postgres_data:
