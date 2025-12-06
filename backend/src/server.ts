@@ -1,46 +1,151 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { createOrder, getOrder, getOrders } from './services/orderService';
+import { tracer } from './utils/tracing';
+import { createClient } from '@clickhouse/client';
+import { authMiddleware, AuthRequest, generateToken } from './middleware/auth';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// ClickHouse client for logging spans
+const clickhouse = createClient({
+  host: process.env.CLICKHOUSE_URL || 'http://localhost:8123',
+  username: process.env.CLICKHOUSE_USER || 'default',
+  password: process.env.CLICKHOUSE_PASSWORD || '',
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Health check
-app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+// Distributed Tracing Middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+  
+  // Parse trace header or generate new trace
+  const traceHeader = req.headers['x-trace-id'] as string | undefined;
+  const { traceId, parentSpanId } = tracer.parseTraceHeader(traceHeader);
+  const spanId = tracer.generateId();
+  
+  // Attach to request for downstream use
+  (req as any).tracing = { traceId, spanId, parentSpanId };
+  
+  // Set response header
+  res.setHeader('X-Trace-ID', `${traceId},${spanId}`);
+  
+  // Log span on response finish
+  res.on('finish', async () => {
+    const endTime = Date.now();
+    const userId = (req as AuthRequest).user?.user_id || 0;
+    
+    const spanLog = tracer.createOtelSpan(
+      traceId,
+      spanId,
+      parentSpanId,
+      userId.toString(),
+      `${req.method} ${req.path}`,
+      res.statusCode,
+      startTime,
+      endTime,
+      { method: req.method, path: req.path, query: req.query },
+      { status: res.statusCode, message: res.statusMessage },
+      { pod_id: process.env.HOSTNAME || 'backend-local' }
+    );
+    
+    // Log to console
+    console.log('[TRACE]', JSON.stringify(spanLog));
+    
+    // Insert to ClickHouse asynchronously
+    try {
+      await clickhouse.insert({
+        table: 'otel_traces',
+        values: [spanLog],
+        format: 'JSONEachRow',
+      });
+    } catch (error) {
+      console.error('[TRACE] Failed to insert span:', error);
+    }
+  });
+  
+  next();
 });
 
-// Create single order
-app.post('/api/orders', async (req: Request, res: Response) => {
+// Health check
+app.get('/health', (req: Request, res: Response) => {
+  res.json({ status: 'healthy', service: 'order', timestamp: new Date().toISOString() });
+});
+
+// Generate demo JWT token
+app.post('/api/auth/token', (req: Request, res: Response) => {
+  const { user_id, email } = req.body;
+  
+  if (!user_id || !email) {
+    return res.status(400).json({ error: 'user_id and email are required' });
+  }
+  
+  const token = generateToken(user_id, email);
+  res.json({ token, user_id, email });
+});
+
+// Create single order (protected with JWT)
+app.post('/api/orders', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { user_id, amount, status, email, name } = req.body;
+    const { amount, status } = req.body;
+    if (amount > 10000) {
+      throw new Error('Amount too high');
+    }
+    const userId = req.user!.user_id;
+    const userEmail = req.user!.email;
 
     if (!amount || !status) {
       return res.status(400).json({ error: 'amount and status are required' });
     }
 
-    const finalUserId = user_id || uuidv4();
-
+    // Create order
     const order = await createOrder({
-      user_id: finalUserId,
+      user_id: userId.toString(),
       amount: parseFloat(amount),
       status,
-      email,
-      name,
+      email: userEmail,
+      name: `User ${userId}`,
     });
 
+    // Call payment service
+    try {
+      const tracing = (req as any).tracing;
+      const paymentUrl = process.env.PAYMENT_SERVICE_URL || 'http://payment:3002';
+      
+      const paymentResponse = await axios.post(
+        `${paymentUrl}/api/payments/process`,
+        {
+          order_id: order.order_id,
+          amount: order.amount,
+        },
+        {
+          headers: {
+            'Authorization': req.headers.authorization,
+            'X-Trace-ID': `${tracing.traceId},${tracing.spanId}`,
+          },
+        }
+      );
+      
+      (order as any).payment_info = paymentResponse.data;
+    } catch (paymentError) {
+      console.error('Payment service error:', paymentError);
+      // Continue even if payment fails
+      (order as any).payment_info = { error: 'Payment service unavailable' };
+    }
+
     res.status(201).json(order);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating order:', error);
-    res.status(500).json({ error: 'Failed to create order' });
+    res.status(500).json({ error: error?.message });
   }
 });
 

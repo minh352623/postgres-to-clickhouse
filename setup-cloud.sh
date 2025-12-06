@@ -17,7 +17,7 @@ NC='\033[0m'
 CLICKHOUSE_HOST="h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud"
 CLICKHOUSE_PORT="8443"
 CLICKHOUSE_USER="default"
-CLICKHOUSE_PASSWORD="my-passwork"
+CLICKHOUSE_PASSWORD="my-password"
 CLICKHOUSE_URL="https://${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}"
 
 echo -e "${YELLOW}Step 1: Creating frontend .env file${NC}"
