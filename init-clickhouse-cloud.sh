@@ -3,7 +3,7 @@
 # ClickHouse Cloud Credentials
 CLICKHOUSE_URL="https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443"
 CLICKHOUSE_USER="default"
-CLICKHOUSE_PASSWORD="CryI6p0oB.Cd6"
+CLICKHOUSE_PASSWORD="my-password"
 
 echo "🚀 Initializing ClickHouse Cloud Database..."
 

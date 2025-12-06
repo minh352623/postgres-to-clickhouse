@@ -135,7 +135,7 @@ services:
       KAFKA_BROKERS: kafka:9092
       CLICKHOUSE_URL: https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: CryI6p0oB.Cd6
+      CLICKHOUSE_PASSWORD: my-password
     networks:
       - streaming-net
 
@@ -178,7 +178,7 @@ services:
       JWT_SECRET: your-secret-key-change-in-production
       CLICKHOUSE_URL: https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: CryI6p0oB.Cd6
+      CLICKHOUSE_PASSWORD: my-password
       CLICKHOUSE_DATABASE: default
     networks:
       - streaming-net
@@ -197,7 +197,7 @@ services:
       PORT: 3002
       CLICKHOUSE_URL: https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: CryI6p0oB.Cd6
+      CLICKHOUSE_PASSWORD: my-password
       JWT_SECRET: your-secret-key-change-in-production
     networks:
       - streaming-net
@@ -217,7 +217,7 @@ services:
     environment:
       CLICKHOUSE_URL: https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: CryI6p0oB.Cd6
+      CLICKHOUSE_PASSWORD: my-password
       CLICKHOUSE_DATABASE: default
     networks:
       - streaming-net

@@ -4,7 +4,7 @@ const axios = require('axios');
 // ClickHouse Cloud configuration
 const CLICKHOUSE_URL = process.env.CLICKHOUSE_URL || 'https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443';
 const CLICKHOUSE_USER = process.env.CLICKHOUSE_USER || 'default';
-const CLICKHOUSE_PASSWORD = process.env.CLICKHOUSE_PASSWORD || 'CryI6p0oB.Cd6';
+const CLICKHOUSE_PASSWORD = process.env.CLICKHOUSE_PASSWORD || 'my-password';
 
 // Kafka configuration
 const kafka = new Kafka({
