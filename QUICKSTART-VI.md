@@ -56,7 +56,7 @@ docker exec streaming-postgres psql -U postgres -d orders_db \
 
 **Trong ClickHouse Cloud**:
 ```bash
-curl --user "default:my-passwork" \
+curl --user "default:CryI6p0oB.Cd6" \
   --data-binary "SELECT count() FROM orders" \
   "https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443"
 ```
@@ -129,12 +129,12 @@ docker-compose logs clickhouse-bridge | grep "Synced"
 
 ```bash
 # Count records
-curl --user "default:my-passwork" \
+curl --user "default:CryI6p0oB.Cd6" \
   --data-binary "SELECT count() as total FROM orders" \
   "https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443"
 
 # View latest orders
-curl --user "default:my-passwork" \
+curl --user "default:CryI6p0oB.Cd6" \
   --data-binary "SELECT * FROM orders ORDER BY created_at DESC LIMIT 5" \
   "https://h2zp7fbmjw.asia-southeast1.gcp.clickhouse.cloud:8443"
 ```
